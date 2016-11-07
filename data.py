@@ -1,3 +1,10 @@
+#
+# Contains any functionality necessary to set up a dataset for deep-learning.
+# The main function here is 'load_dataset()', which uses 'get_images()' and
+# 'get_labels()' to parse the chosen dataset.
+#
+# ===========================================================================
+
 import numpy as np
 import scipy.misc
 from PIL import Image
@@ -9,6 +16,11 @@ import theano
 import theano.tensor as T
 
 
+'''	Creates a .png file from some image pixels. Useful for testing.
+	Args:
+		pixels: Raw image pixels.
+		name: Name for the image file we're creating.
+'''
 def make_image(pixels, name):
 
 	from PIL import Image
@@ -17,10 +29,16 @@ def make_image(pixels, name):
 	img.show()
 
 
-'''	parameters:
-		path - Path to the data directory.
-	returns:
-		x - An array of image (x) and label (y) pairs. '''
+'''	Loads in a dataset from a given path, and segments it into different
+	sets for cross-validation.
+	Args:
+		path: Path to the data directory.
+	Returns:
+		A list of tuples. Each tuple corresponds to a training set,
+		where the first element is a theano shared variable
+		containing raw image data, and the second is the corresponding
+		label.
+'''
 def load_dataset(path="data/"):
 
 	# Get a list of directories.
@@ -46,31 +64,31 @@ def load_dataset(path="data/"):
 		print 'theanoifying'
 		print data_x.shape, data_x[0].shape, type(data_x[0])
 		print len(data_y)
-		# TODO: (# of images, image width x height)
-		# TODO: (# of labels, )
-		shared_x = theano.shared(data_x, borrow=True)
+		
+		shared_x = theano.shared(np.asarray(data_x,
+			dtype=theano.config.floatX), borrow=True)
 		shared_y = theano.shared(np.asarray(data_y,
 			dtype=theano.config.floatX), borrow=True)
 
 		return shared_x, T.cast(shared_y, 'int32')
 	
-	print '\n\nIMPORTANT\t\t', type(images), type(labels)
 	images = np.asarray(images)
-	print images[0].shape
+	
 	# Divide the data into trainign, testing, and validation sets.
-	x_train, y_train = shared_dataset(images[:10], labels[:10])
-	#x_train, y_train = shared_dataset(images[:23520], labels[:23520])
-	#x_val, y_val	 = shared_dataset(images[23520:31374], labels[23520:31374])
-	#x_test, y_test	 = shared_dataset(images[31374:], labels[31374:])
-	print x_train.eval(), y_train
-	return (1,2)
-	#return [ (x_train, y_train), (x_val, y_val), (x_test, y_test) ]
+	x_train, y_train = shared_dataset(images[:23520], labels[:23520])
+	x_val, y_val	 = shared_dataset(images[23520:31374], labels[23520:31374])
+	x_test, y_test	 = shared_dataset(images[31374:], labels[31374:])
+	
+	return [ (x_train, y_train), (x_val, y_val), (x_test, y_test) ]
 
 
-'''	parameters:
-		dir_name - The name of the directory to parse.
-	returns:
-		tuple - (list of images in ndarrays, csv file handle) '''
+'''	Parse a given directory.
+	Args:
+		dir_name: The name of the directory to parse.
+	Returns:
+		An array of tuples, where each tuple has raw image data as 
+		its first element, and the corresponding label as its second.
+'''
 def parse_directory(dir_path):
 
 	# Get images.
@@ -88,37 +106,35 @@ def parse_directory(dir_path):
 	       ]
 
 
-'''	parameters:
-		dir_path - The path to the .ppm images.
-	returns:
-		list - Each image in the directory in ndarray foramt. '''
-def rget_images(dir_path):
-
-	images = []
-	for img_name in os.listdir(dir_path)[:-1]:
-		img_path = dir_path + '/' + img_name
-		images.append(scipy.misc.imread(img_path))
-
-	return images
-
+'''	Read all images in a given directory into a specific format.
+	The following article really helped:
+	
+	https://blog.eduardovalle.com/2015/08/25/input-images-theano/
+	
+	Args:
+		dir_path: The path to the .ppm images.
+	Returns:
+		Returns an ndarray containing each images pixel data in
+		a numpy array.
+'''
 def get_images(dir_path):
 
-	imagesize = (15, 15)
-	nchannels = 3
-	i = 0
+	# Image size and the number of channels. Note we are using RGB imgs.
+	imagesize, nchannels = (15, 15), 3
 	images = []
 	for img_name in os.listdir(dir_path)[:-1]:
 		img_path = dir_path + '/' + img_name
 		img = Image.open(img_path, 'r')
-		images.append(preprocess(img))
+		images.append(pre_process(img))
 
-	ImageShape = (1,) + imagesize + (nchannels,)
+	# Format image array.
+	img_shape = (1,) + imagesize + (nchannels,)
 	all_images = [
 			np.fromstring(i.tobytes(), dtype='uint8', count=-1, sep='')
 			for i in images
 		     ]
 	all_images = [
-			np.rollaxis(a.reshape(ImageShape), 3, 1)
+			np.rollaxis(a.reshape(img_shape), 3, 1)
 			for a in all_images
 		     ]
 	
@@ -128,21 +144,27 @@ def get_images(dir_path):
 	return all_images
 
 
-'''	parameters:
-		img - Raw image pixels for pre-processing.
-	returns:
-		list - The preprocessed image pixels. '''
-def preprocess(img):
+'''	Pre-Process an image. Currently this is a simple resize operation,
+	however I plan to experiment with a number of data augmentation
+	techniques.
+	Args:
+		img: Raw image pixels for pre-processing.
+	Returns:
+		The preprocessed image pixels.
+'''
+def pre_process(img):
 
 	# GTSRB images range from 15x15 - 250x250.
 	img_size = (15, 15)
 	return img.resize(img_size, Image.BILINEAR)
 
 
-'''	parameters:
-		csv_path - The path to the .csv file containing labels.
-	returns:
-		array - A list of class labels. '''
+'''	Returns a list of labels from a given .csv file.
+	Args:
+		csv_path: The path to the target .csv file.
+	Returns:
+		A list of class labels.
+'''
 def get_labels(csv_path):
 
 	# Skip the csv header, and append the class ID (found at index 7)
@@ -156,7 +178,19 @@ def get_labels(csv_path):
 	
 	return labels
 
-#TODO: Read these articles:
-# https://blog.eduardovalle.com/2015/08/25/input-images-theano/
-imgs, labels = load_dataset()
+
+# Load in the dataset.
+data = load_dataset()
+network_in = {
+		'training': data[0],
+		'validation': data[1],
+		'test': data[2]
+	     }
+
+print 'Training: ', network_in['training'][0].shape.eval()
+print 'Training: ', network_in['training'][1].shape.eval()
+print 'Validation: ', network_in['validation'][0].shape.eval()
+print 'Test: ', network_in['test'][0].shape.eval()
+
+print network_in['training'][0][0].eval()
 
