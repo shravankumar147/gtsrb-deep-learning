@@ -5,6 +5,7 @@
 #
 # ===========================================================================
 
+
 import numpy as np
 import scipy.misc
 from PIL import Image
@@ -56,14 +57,12 @@ def load_dataset(path="data/"):
 		images += dir_images
 		labels += dir_labels
 
-	'''	(Helper)
-		parameters: data_x - A list of ndarray images.
-			    data_y - A list of corresponding image labels.
-		returns: theano shared variables. '''
+	'''	(Helper) Load the data into Theano Shared variables.
+		Args: data_x - A list of ndarray images.
+		      data_y - A list of corresponding image labels.
+		Returns: theano shared variables.
+	'''
 	def shared_dataset(data_x, data_y):
-		print 'theanoifying'
-		print data_x.shape, data_x[0].shape, type(data_x[0])
-		print len(data_y)
 		
 		shared_x = theano.shared(np.asarray(data_x,
 			dtype=theano.config.floatX), borrow=True)
@@ -99,7 +98,7 @@ def parse_directory(dir_path):
 	csv_path 	= dir_path + '/' + csv_fname
 	labels 		= get_labels(csv_path)
 
-	if len(images) != len(labels): return -1
+	if len(images) != len(labels): raise Exception()
 	return [
 			(image, label)
 			for image, label in zip(images, labels)
@@ -140,13 +139,14 @@ def get_images(dir_path):
 	
 	all_images = np.concatenate(all_images)
 	
-	print all_images.shape, len(all_images), all_images[0].shape
 	return all_images
 
 
 '''	Pre-Process an image. Currently this is a simple resize operation,
 	however I plan to experiment with a number of data augmentation
 	techniques.
+	Implement this: https://arxiv.org/pdf/1406.4729v4.pdf
+	
 	Args:
 		img: Raw image pixels for pre-processing.
 	Returns:
@@ -177,20 +177,4 @@ def get_labels(csv_path):
 			labels.append(row[7])
 	
 	return labels
-
-
-# Load in the dataset.
-data = load_dataset()
-network_in = {
-		'training': data[0],
-		'validation': data[1],
-		'test': data[2]
-	     }
-
-print 'Training: ', network_in['training'][0].shape.eval()
-print 'Training: ', network_in['training'][1].shape.eval()
-print 'Validation: ', network_in['validation'][0].shape.eval()
-print 'Test: ', network_in['test'][0].shape.eval()
-
-print network_in['training'][0][0].eval()
 
