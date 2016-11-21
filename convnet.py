@@ -23,30 +23,34 @@ class ConvNNet():
 		Args:
 			inpt_shape: The dimensions of the input tensor.
 				    (__, channels, width, height)
+			use_existing: Toggle to use existing model params.
 	'''
 	def __init__(self, inpt_shape, use_existing=False):
 		
 		self.inpt	= T.tensor4('inputs')
 		self.y		= T.ivector('y')
 			
+		# Architecture inspired by LeNet.
 		l0 = nnet.layers.InputLayer(shape=inpt_shape,
 						 input_var=self.inpt)
 		l1 = nnet.layers.Conv2DLayer(
-				l0, num_filters=32, filter_size=(5,5),
+				l0, num_filters=32, filter_size=(3,3),
 				nonlinearity=nnet.nonlinearities.rectify,
 				W=nnet.init.GlorotUniform())
+		l2 = nnet.layers.MaxPool2DLayer(l1, pool_size=(2,2))
 		l3 = nnet.layers.Conv2DLayer(
-				l1, num_filters=32, filter_size=(5,5),
+				l2, num_filters=32, filter_size=(3,3),
 				nonlinearity=nnet.nonlinearities.rectify)
-		l3a = nnet.layers.DenseLayer(
-				nnet.layers.dropout(l3, p=0.5),
-				num_units=50,
+		l4 = nnet.layers.MaxPool2DLayer(l3, pool_size=(2,2))
+		l5 = nnet.layers.DenseLayer(
+				nnet.layers.dropout(l4, p=0.5),
+				num_units=100,
 				nonlinearity=nnet.nonlinearities.rectify)
 		self.cnet = nnet.layers.DenseLayer(
-				nnet.layers.dropout(l3a, p=0.5),
+				nnet.layers.dropout(l5, p=0.5),
 				num_units=43, 
 				nonlinearity=nnet.nonlinearities.softmax)
-
+	
 		# Load in parameters from an existing model.
 		if use_existing:
 			print '\tloading existing model.'
@@ -84,7 +88,7 @@ class ConvNNet():
 		updates = nnet.updates.nesterov_momentum(loss, self.params,
 				learning_rate=eta, momentum=rho)
 	
-		test_pred = nnet.layers.get_output(self.cnet, determinstic=True)
+		test_pred = nnet.layers.get_output(self.cnet, deterministic=True)
 		test_loss = nnet.objectives.categorical_crossentropy(
 				test_pred, self.y)
 		test_loss = test_loss.mean()
@@ -113,6 +117,7 @@ class ConvNNet():
 				train_batches += 1
 
 			val_err, val_acc, val_batches = 0, 0, 0
+			val_avg = 0
 			for batch_index in xrange(n_val_batches):
 				x_batch = x_val[batch_index * batch_size:
 						(batch_index + 1) * batch_size]
@@ -120,19 +125,27 @@ class ConvNNet():
 						(batch_index + 1) * batch_size]
 				err, acc = val_model(
 						x_batch.eval(), y_batch.eval())
+				val_avg += err
+
 				val_err += err
 				val_acc += acc
 				val_batches += 1
 			
-			print 'Epoch ', epoch, 'of ', epochs, \
-				'\n\ttraining error: ',train_err/train_batches,\
-			       '\n\tvalidation error: ', val_err/val_batches,\
-			       '\n\tvalidation_accuracy: ', val_acc/val_batches * 100
+			print '\nEpoch ', epoch, 'of ', epochs,\
+				'\n\ttraining error: ',\
+					train_err/train_batches,\
+			       '\n\tvalidation error: ',\
+			       		val_err/val_batches,\
+			       '\n\tvalidation loss: ',\
+			       		val_acc/val_batches * 100
+			print 'Accuracy: ', (1 - val_acc/val_batches) * 100, '%'
 			
-			np.savez('gtsrb-model.npz',
-					*nnet.layers.get_all_param_values(self.cnet))
+			np.savez('gtsrb-model.npz', *nnet.
+						     layers.
+						     get_all_param_values(
+							     self.cnet))
 
-		
+
 # Load in the data.
 data = load_dataset()
 network_in = {
@@ -142,8 +155,11 @@ network_in = {
 	     }
 
 # Create the Convn Net.
-gtsrb_convnet = ConvNNet(inpt_shape=(None, 3, 15,15), use_existing=True)
+gtsrb_convnet = ConvNNet(inpt_shape=(None, 3, 15,15), use_existing=False)
+#gtsrb_convnet = ConvNNet(inpt_shape=(None, 3, 15,15), use_existing=True)
 BATCH_SIZE = 1120
+
+# N.B. -- The model overfits quite significantly.
 gtsrb_convnet.train(
 				dataset=network_in,
 				batch_size=BATCH_SIZE,
