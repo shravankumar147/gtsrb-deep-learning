@@ -17,19 +17,26 @@ import theano
 import theano.tensor as T
 
 
-'''	Creates a .png file from some image pixels. Useful for testing.
+'''	Creates a .png file from an RGB pixel list (i.e. a list of 3 pixel arrays,
+	each corresponding to a colour channel/band). Useful for testing.
 	Args:
-		pixels: Raw image pixels.
+		pixels: Raw image pixel array container.
 		name: Name for the image file we're creating.
 '''
-def make_image(pixels, name):
+def show_image(pixels, name='img.png'):
 
 	from PIL import Image
-	img = Image.fromarray(pixels, 'RGB')
-	img.save(name)
-	img.show()
-
-
+	
+	# Cast each channel to uint8, as PIL cannot merge images of type 'F'.
+	r = Image.fromarray(np.uint8(pixels[0]))
+	g = Image.fromarray(np.uint8(pixels[1]))
+	b = Image.fromarray(np.uint8(pixels[2]))
+	
+	# Merge the RGB bands, and display the image.
+	rgb_img = Image.merge("RGB", (r,g,b))
+	rgb_img.show()
+	
+	
 '''	Loads in a dataset from a given path, and segments it into different
 	sets for cross-validation.
 	Args:
@@ -57,6 +64,13 @@ def load_dataset(path="data/"):
 		images += dir_images
 		labels += dir_labels
 
+	# Shuffle dataset.
+	combined = zip(images, labels)
+	
+	import random
+	random.shuffle(combined)
+	images[:], labels[:] = zip(*combined)
+	
 	'''	(Helper) Load the data into Theano Shared variables.
 		Args: data_x - A list of ndarray images.
 		      data_y - A list of corresponding image labels.
@@ -119,7 +133,7 @@ def parse_directory(dir_path):
 def get_images(dir_path):
 
 	# Image size and the number of channels. Note we are using RGB imgs.
-	imagesize, nchannels = (15, 15), 3
+	imagesize, nchannels = (30, 30), 3
 	images = []
 	for img_name in os.listdir(dir_path)[:-1]:
 		img_path = dir_path + '/' + img_name
@@ -145,7 +159,7 @@ def get_images(dir_path):
 '''	Pre-Process an image. Currently this is a simple resize operation,
 	however I plan to experiment with a number of data augmentation
 	techniques.
-	Implement this: https://arxiv.org/pdf/1406.4729v4.pdf
+	TODO: Implement this: https://arxiv.org/pdf/1406.4729v4.pdf
 	
 	Args:
 		img: Raw image pixels for pre-processing.
@@ -155,7 +169,7 @@ def get_images(dir_path):
 def pre_process(img):
 
 	# GTSRB images range from 15x15 - 250x250.
-	img_size = (15, 15)
+	img_size = (30, 30)
 	return img.resize(img_size, Image.BILINEAR)
 
 
